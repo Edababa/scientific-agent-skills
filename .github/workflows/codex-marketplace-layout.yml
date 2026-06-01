@@ -43,3 +43,5 @@ jobs:
             git commit -m "Prepare conventional Codex marketplace layout"
             git push
           fi
+
+# Triggered by Codex packaging workflow.
