@@ -1,0 +1,45 @@
+name: Prepare Codex marketplace layout
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/codex-marketplace-layout.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Create conventional Codex plugin layout
+        run: |
+          set -euo pipefail
+          mkdir -p plugins/scientific-agent-skills/.codex-plugin
+          cp .codex-plugin/plugin.json plugins/scientific-agent-skills/.codex-plugin/plugin.json
+          rm -rf plugins/scientific-agent-skills/skills
+          ln -s ../../skills plugins/scientific-agent-skills/skills
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('.agents/plugins/marketplace.json')
+          data = json.loads(path.read_text())
+          data['plugins'][0]['source']['path'] = './plugins/scientific-agent-skills'
+          path.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .agents/plugins/marketplace.json plugins/scientific-agent-skills
+          if git diff --cached --quiet; then
+            echo "Codex marketplace layout already prepared."
+          else
+            git commit -m "Prepare conventional Codex marketplace layout"
+            git push
+          fi
