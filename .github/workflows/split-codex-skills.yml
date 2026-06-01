@@ -2,6 +2,10 @@ name: Split Codex skills into plugins
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/split-codex-skills.yml
+      - CODEX_MARKETPLACE.md
 
 permissions:
   contents: write
@@ -28,7 +32,6 @@ jobs:
           plugins_root = root / 'plugins'
           plugins_root.mkdir(exist_ok=True)
 
-          # Remove the previous aggregate wrapper. Individual skill folders are regenerated below.
           aggregate = plugins_root / 'scientific-agent-skills'
           if aggregate.exists() or aggregate.is_symlink():
               if aggregate.is_symlink() or aggregate.is_file():
@@ -77,10 +80,7 @@ jobs:
                   'name': name,
                   'version': '2.45.0',
                   'description': desc,
-                  'author': {
-                      'name': 'K-Dense Inc.',
-                      'url': 'https://github.com/K-Dense-AI/scientific-agent-skills',
-                  },
+                  'author': {'name': 'K-Dense Inc.', 'url': 'https://github.com/K-Dense-AI/scientific-agent-skills'},
                   'repository': 'https://github.com/Edababa/scientific-agent-skills',
                   'homepage': 'https://github.com/K-Dense-AI/scientific-agent-skills',
                   'license': 'MIT',
@@ -109,11 +109,7 @@ jobs:
                   'description': desc,
               })
 
-          marketplace = {
-              'name': 'scientific-agent-skills-marketplace',
-              'interface': {'displayName': 'Scientific Agent Skills'},
-              'plugins': marketplace_plugins,
-          }
+          marketplace = {'name': 'scientific-agent-skills-marketplace', 'interface': {'displayName': 'Scientific Agent Skills'}, 'plugins': marketplace_plugins}
           marketplace_path = root / '.agents' / 'plugins' / 'marketplace.json'
           marketplace_path.parent.mkdir(parents=True, exist_ok=True)
           marketplace_path.write_text(json.dumps(marketplace, indent=2) + '\n', encoding='utf-8')
