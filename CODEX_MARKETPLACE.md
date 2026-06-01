@@ -8,6 +8,6 @@ Add the marketplace in Codex Desktop:
 codex plugin marketplace add https://github.com/Edababa/scientific-agent-skills
 ```
 
-Then install the `scientific-agent-skills` plugin from that marketplace.
+Then install only the individual scientific skills you need from that marketplace.
 
 The upstream skills are authored by K-Dense Inc. and distributed under the MIT License.
