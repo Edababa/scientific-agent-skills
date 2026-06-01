@@ -1,0 +1,131 @@
+name: Split Codex skills into plugins
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  split-skills:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Generate one Codex plugin per skill
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          import shutil
+          from pathlib import Path
+
+          root = Path('.')
+          skills_root = root / 'skills'
+          plugins_root = root / 'plugins'
+          plugins_root.mkdir(exist_ok=True)
+
+          # Remove the previous aggregate wrapper. Individual skill folders are regenerated below.
+          aggregate = plugins_root / 'scientific-agent-skills'
+          if aggregate.exists() or aggregate.is_symlink():
+              if aggregate.is_symlink() or aggregate.is_file():
+                  aggregate.unlink()
+              else:
+                  shutil.rmtree(aggregate)
+
+          def display_name(name: str) -> str:
+              special = {'pdf', 'pptx', 'docx', 'xlsx', 'rdkit', 'esm', 'bids', 'dask', 'gget', 'pymc'}
+              return ' '.join(part.upper() if part in special else part.capitalize() for part in name.split('-'))
+
+          def read_description(skill_dir: Path) -> str:
+              skill_md = skill_dir / 'SKILL.md'
+              if not skill_md.exists():
+                  return 'Scientific agent skill.'
+              text = skill_md.read_text(encoding='utf-8', errors='ignore')
+              if not text.startswith('---'):
+                  return 'Scientific agent skill.'
+              end = text.find('\n---', 3)
+              frontmatter = text[3:end] if end != -1 else ''
+              match = re.search(r'^description:\s*(.*)$', frontmatter, re.M)
+              if not match:
+                  return 'Scientific agent skill.'
+              desc = match.group(1).strip().strip('"\'')
+              return desc[:217] + '...' if len(desc) > 220 else desc
+
+          marketplace_plugins = []
+          for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
+              name = skill_dir.name
+              label = display_name(name)
+              desc = read_description(skill_dir)
+              plugin_dir = plugins_root / name
+              manifest_dir = plugin_dir / '.codex-plugin'
+              manifest_dir.mkdir(parents=True, exist_ok=True)
+              symlink_parent = plugin_dir / 'skills'
+              symlink_parent.mkdir(exist_ok=True)
+              skill_link = symlink_parent / name
+              if skill_link.exists() or skill_link.is_symlink():
+                  if skill_link.is_symlink() or skill_link.is_file():
+                      skill_link.unlink()
+                  else:
+                      shutil.rmtree(skill_link)
+              skill_link.symlink_to(Path('..') / '..' / '..' / 'skills' / name)
+
+              manifest = {
+                  'name': name,
+                  'version': '2.45.0',
+                  'description': desc,
+                  'author': {
+                      'name': 'K-Dense Inc.',
+                      'url': 'https://github.com/K-Dense-AI/scientific-agent-skills',
+                  },
+                  'repository': 'https://github.com/Edababa/scientific-agent-skills',
+                  'homepage': 'https://github.com/K-Dense-AI/scientific-agent-skills',
+                  'license': 'MIT',
+                  'keywords': ['science', 'research', 'codex-skills', name],
+                  'skills': './skills/',
+                  'interface': {
+                      'displayName': label,
+                      'shortDescription': desc[:120],
+                      'longDescription': desc,
+                      'developerName': 'K-Dense Inc.',
+                      'category': 'Research',
+                      'capabilities': ['Scientific research workflow'],
+                      'websiteURL': 'https://github.com/K-Dense-AI/scientific-agent-skills',
+                      'brandColor': '#2563EB',
+                      'defaultPrompt': f'Help me use the {label} skill.',
+                  },
+              }
+              (manifest_dir / 'plugin.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+
+              marketplace_plugins.append({
+                  'name': name,
+                  'displayName': label,
+                  'source': {'source': 'local', 'path': f'./plugins/{name}'},
+                  'policy': {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'},
+                  'category': 'Research',
+                  'description': desc,
+              })
+
+          marketplace = {
+              'name': 'scientific-agent-skills-marketplace',
+              'interface': {'displayName': 'Scientific Agent Skills'},
+              'plugins': marketplace_plugins,
+          }
+          marketplace_path = root / '.agents' / 'plugins' / 'marketplace.json'
+          marketplace_path.parent.mkdir(parents=True, exist_ok=True)
+          marketplace_path.write_text(json.dumps(marketplace, indent=2) + '\n', encoding='utf-8')
+          print(f'Generated {len(marketplace_plugins)} individual Codex plugin entries.')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .agents/plugins/marketplace.json plugins
+          if git diff --cached --quiet; then
+            echo "No Codex marketplace changes to commit."
+          else
+            git commit -m "Split Scientific Agent Skills into individual Codex plugins"
+            git push
+          fi
